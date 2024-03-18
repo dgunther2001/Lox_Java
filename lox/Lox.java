@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
-
 public class Lox {
     static boolean hadError = false;
     public static void main(String[] args) throws IOException{
@@ -55,10 +54,12 @@ public class Lox {
     private static void run(String source) {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
+        Parser parser = new Parser(tokens);
+        Expr expression = parser.parse();
 
-        for(Token token: tokens) {
-            System.out.println(token);
-        }
+        if(hadError) return;
+
+        System.out.println(new AstPrinter().print(expression));
     }
 
     /*
@@ -68,8 +69,16 @@ public class Lox {
         report(line, "", message); // gives us a line
     }
 
-    private static void report(int line, String where, String message) {
+    static void report(int line, String where, String message) {
         System.err.println("[line " + line + "] Error" + where + ": " + message); // this is the actual error message output to the user
         hadError = true;
+    }
+
+    static void error(Token token, String message) { 
+        if (token.type == TokenType.EOF) { // if we're at the end of the file and an expression is unclosed, it says so
+            report(token.line, " at end", message);
+        } else { // otherwise, it reports the problematic lexeme and the line it's on
+            report(token.line, " at '" + token.lexeme + "'", message);
+        }
     }
 }

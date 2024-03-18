@@ -16,11 +16,21 @@ import static lox.TokenType.*;
  */
 
 class Parser  { // consumes a flat input sequence of tokens, which are eventually going to be parsed
+    private static class ParseError extends RuntimeException {}
+
     private final List<Token> tokens;
     private int current = 0; // sets the current token to 0
 
     Parser(List<Token> tokens) { // pass in a token list to parse for the constructor
         this.tokens = tokens;
+    }
+
+    Expr parse() {
+        try {
+            return expression(); // tries to parse the expression
+        } catch (ParseError error) {
+            return null; // throws an error if the expression is broken
+        }
     }
     
     private Expr expression() { // based solely on equality, so just calles that method
@@ -51,6 +61,58 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
         return expr;
     }
 
+    private Expr term() { // same idea as previous language layer, but creates factor based binary expressions recursively
+        Expr expr = factor();
+
+        while (match(MINUS, PLUS)) {
+            Token operator = previous();
+            Expr right = factor();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr factor() { // same idea as previous language layer, but creates unary based binary expressions recursively
+        Expr expr = unary();
+
+        while (match(SLASH, STAR)) {
+            Token operator = previous();
+            Expr right = unary();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr unary() { // instead of having two sided expressions, just returns a unary expression, but with a similar mechanism to all of the binary expressions
+        if (match(BANG, MINUS)) { 
+            Token operator = previous();
+            Expr right = unary();
+            return new Expr.Unary(operator, right);
+        }
+
+        return primary();
+    }
+
+    private Expr primary() { // checks all of our primary expressions and returns a literal (A LEAF NODE). Also checks for open and closed parenthesis
+        if (match(FALSE)) return new Expr.Literal(false);
+        if (match(TRUE)) return new Expr.Literal(true);
+        if (match(NIL)) return new Expr.Literal(null);
+
+        if (match(NUMBER, STRING)) {
+            return new Expr.Literal(previous().literal);
+        }
+
+        if(match(LEFT_PAREN)) {
+            Expr expr = expression();
+            consume(RIGHT_PAREN, "Expect ')' after expression.");
+            return new Expr.Grouping(expr);
+        }
+
+        throw error(peek(), "Exprec expression.");
+    }
+    
     private boolean match(TokenType... types) { // this method checks to see if a token matches a particular token type (sees which part of our heirarchy an expression belongs to)
         for (TokenType type : types) { // iterates over a list of type
             if (check(type)) { // calls the check method to see if they are equal
@@ -59,6 +121,13 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
             }
         }
         return false;
+    }
+
+    private Token consume(TokenType type, String message) {
+        if (check(type)) return advance(); // advances looking for the closing parenthesis
+
+        throw error(peek(), message);
+
     }
 
     private boolean check(TokenType type) { // this method checks to see a TokenType is matched
@@ -83,5 +152,31 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
         return tokens.get(current - 1); // returns the token before the current token in the list
     }
 
+    private ParseError error(Token token, String message) {
+        Lox.error(token, message);
+        return new ParseError();
+    }
+
+    private void synchronize() { // discards tokens until it thinks it has found a statement boundary
+        advance();
+
+        while(!isAtEnd()) {
+            if (previous().type == SEMICOLON) return;
+
+            switch (peek().type) {
+                case CLASS:
+                case FUN:
+                case VAR:
+                case FOR:
+                case IF:
+                case WHILE:
+                case PRINT:
+                case RETURN:
+                    return;
+            }
+
+            advance();
+        }
+    }
 
 }
