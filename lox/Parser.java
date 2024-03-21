@@ -1,5 +1,6 @@
 package lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static lox.TokenType.*;
@@ -12,8 +13,31 @@ import static lox.TokenType.*;
  *  term       -> factor ( ( "-" | "+" ) factor )* ;
  *  factor     -> unary ( ( "/" | "*" ) unary )* ;
  *  unary      -> ( "!" | "-" ) unary | primary ;
- *  primary    -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+ *  primary    -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" IDENTIFIER ;
  */
+
+ /*
+  * DEFINING GRAMMAR FOR STATEMENTs
+  * program    -> statement* EOF
+  * statement  -> exprStmt | printStmt
+  * exprStmt   -> expression ";"
+  * printStmt  -> "print" expression ";"
+  */
+
+  /*
+   * RULES FOR DEFINING STATEMENTS
+   * program   -> declaration* EOF
+   * declaration -> varDecl | statement
+   * statement -> exprStmt | printStmt
+   * 
+   * varDecl   -> "var" IDENTIFIER ( "=" expression )? ";"
+   */
+
+   /*
+    * BLOCK STATEMENT GRAMMAR
+    * statement -> exprStmt | printStmt | block
+    * block     -> "{" declarataion "}"
+    */
 
 class Parser  { // consumes a flat input sequence of tokens, which are eventually going to be parsed
     private static class ParseError extends RuntimeException {}
@@ -25,16 +49,90 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
         this.tokens = tokens;
     }
 
-    Expr parse() {
-        try {
-            return expression(); // tries to parse the expression
-        } catch (ParseError error) {
-            return null; // throws an error if the expression is broken
+    List<Stmt> parse() { // parses through a list of statements and creates an AST (brain of our interpreter)
+        List<Stmt> statements = new ArrayList<>();
+        while(!isAtEnd()) { // while we're not at the end of the passed list, add a statement
+            statements.add(declaration());
         }
+        return statements; // return the list of statements
     }
     
     private Expr expression() { // based solely on equality, so just calles that method
-        return equality();
+        return assignment();
+    }
+
+    private Stmt declaration() { // if its a variable declaration, it declares it, otherwise it just behaves like a normal statement
+        try {
+            if (match(VAR)) return varDeclaration();
+            return statement();
+        } catch (ParseError error) {
+            synchronize();
+            return null;
+        }
+    }
+
+    private Stmt statement() { // our bases statments are print, or expression, so this determines how they are eventually evaluated
+        if (match(PRINT)) return printStatement();
+        if (match(LEFT_BRACE)) return new Stmt.Block(block());
+
+        return expressionStatement();
+    }
+
+    /*
+     * printStatement() & expressionStatement() both return an expression wrapped in the proper statement type, and consumes the proper characters
+     */
+    private Stmt printStatement() { // prints out the expression to the user
+        Expr value = expression();
+        consume(SEMICOLON, "Expect ';' after value.");
+        return new Stmt.Print(value);
+    }
+
+    private Stmt varDeclaration() { // creates a variable
+        Token name = consume(IDENTIFIER, "Expect variable name."); // consumes the identifier
+
+        Expr initializer = null; // creates an expression on the right side
+        if(match(EQUAL)) {
+            initializer = expression(); // evaluates the expression if we have an equals
+        }
+
+        consume(SEMICOLON, "Expect ';' after declaration."); // consumes a semicolon
+        return new Stmt.Var(name, initializer); // initializes a new variable statmenet
+    }
+
+    private Stmt expressionStatement() { // deals with the statement if it should be evaluated as an expression
+        Expr expr = expression();
+        consume(SEMICOLON, "Expect ';' after expression.");
+        return new Stmt.Expression(expr);
+    }
+
+    private List<Stmt> block() { // creates a sub array of statements within a block of code to give us variable scope, etc...
+        List<Stmt> statements = new ArrayList<>();
+
+        while(!check(RIGHT_BRACE) && !isAtEnd()) {
+            statements.add(declaration());
+        }
+
+        consume(RIGHT_BRACE, "Expect '}' after block.");
+        return statements;
+    }
+
+    private Expr assignment() {
+        Expr expr = equality(); // first calls the equality() method
+
+        if(match(EQUAL)) {
+            Token equals = previous();
+            Expr value = assignment();
+
+            if (expr instanceof Expr.Variable) {
+                Token name = ((Expr.Variable)expr).name;
+                return new Expr.Assign(name, value);
+            }
+
+            error(equals, "Invalid assignment target.");
+        }
+
+        return expr;
+
     }
 
     private Expr equality() { // defines our equality grammar
@@ -104,6 +202,10 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
             return new Expr.Literal(previous().literal);
         }
 
+        if(match(IDENTIFIER)) {
+            return new Expr.Variable(previous());
+        }
+
         if(match(LEFT_PAREN)) {
             Expr expr = expression();
             consume(RIGHT_PAREN, "Expect ')' after expression.");
@@ -156,7 +258,7 @@ class Parser  { // consumes a flat input sequence of tokens, which are eventuall
         Lox.error(token, message);
         return new ParseError();
     }
-
+    
     private void synchronize() { // discards tokens until it thinks it has found a statement boundary
         advance();
 

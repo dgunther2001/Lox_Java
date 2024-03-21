@@ -98,7 +98,7 @@ class Scanner {
                 break;
             // dealing with string literals
             case '"': string(); break;
-            // the default casee throws an error
+            // the default case throws an error
             default:
                 if (isDigit(c)) { // calls a number function if it is a number
                     number();

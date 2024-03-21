@@ -1,11 +1,17 @@
 package lox;
 
-class Interpreter implements Expr.Visitor<Object /* allows the illusion of dynamically typed variables */> { 
+import java.util.ArrayList;
+import java.util.List;
 
-    void interpret(Expr expression) {  // essentially the API that allows us o actually interpret a piece of code (ALLOWS US TO USE THE INTERPRETER)
+class Interpreter implements Expr.Visitor<Object /* allows the illusion of dynamically typed variables */>, Stmt.Visitor<Void>  { 
+
+    private Environment environment = new Environment();
+
+    void interpret(List<Stmt> statements) {  // essentially the API that allows us o actually interpret a piece of code (ALLOWS US TO USE THE INTERPRETER)
         try {
-            Object value = evaluate(expression);
-            System.out.println(stringify(value));
+            for (Stmt statement : statements) {
+                execute(statement);
+            }
         } catch (RuntimeError error) {
             Lox.runtimeError(error);
         }
@@ -30,6 +36,11 @@ class Interpreter implements Expr.Visitor<Object /* allows the illusion of dynam
 
         //unreachable
         return null;
+    }
+
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) { // go straight to the environment whenever we want to access a variable
+        return environment.get(expr.name);
     }
 
     private void checkNumberOperand(Token operator, Object operand) { // if a unary expression for the negative inversion isn't a number, it throws an error
@@ -71,6 +82,60 @@ class Interpreter implements Expr.Visitor<Object /* allows the illusion of dynam
 
     private Object evaluate(Expr expr) {
         return expr.accept(this); // sends the grouped object back into the interpretors visitor implementation
+    }
+
+    private void execute(Stmt stmt) {
+        stmt.accept(this); // actually calls and executes the statement
+    }
+
+    void executeBlock(List<Stmt> statements, Environment environment) {
+        Environment previous = this.environment; // sets a previous environment
+        try {
+            this.environment = environment; // passes a new environment
+
+            for (Stmt statement : statements) { // executes all of the statements in the block
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous; // goes back to the previous environment
+        }
+    }
+
+    @Override
+    public Void visitBlockStmt(Stmt.Block stmt) {
+        executeBlock(stmt.statements, new Environment(environment));
+        return null;
+    }
+
+    @Override
+    public Void visitExpressionStmt(Stmt.Expression stmt) {
+        evaluate(stmt.expression); // evaluates the expression statment 
+        return null;
+    }
+
+    @Override
+    public Void visitPrintStmt(Stmt.Print stmt) {
+        Object value = evaluate(stmt.expression); // evaluates the statement part of the expression
+        System.out.println(stringify(value)); // actually prints the value out to the user
+        return null;
+    }
+
+    @Override
+    public Void visitVarStmt(Stmt.Var stmt) {
+        Object value = null;
+        if(stmt.initializer != null) {
+            value = evaluate(stmt.initializer);
+        }
+
+        environment.define(stmt.name.lexeme, value); // adds the key value pair to the environment i our HashMap
+        return null;
+    }
+
+    @Override
+    public Object visitAssignExpr(Expr.Assign expr) {
+        Object value = evaluate(expr.value);
+        environment.assign(expr.name, value);
+        return value;
     }
 
     @Override

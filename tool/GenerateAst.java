@@ -13,10 +13,19 @@ public class GenerateAst {
         }
         String outputDir = args[0];
         defineAst(outputDir, "Expr", Arrays.asList(
-           "Binary    : Expr left, Token operator, Expr right",
+            "Assign    : Token name, Expr value",
+                "Binary    : Expr left, Token operator, Expr right",
                 "Grouping  : Expr expression",
                 "Literal   : Object value",
+                "Variable  : Token name",
                 "Unary     : Token operator, Expr right"
+        ));
+
+        defineAst(outputDir, "Stmt", Arrays.asList(
+           "Block      : List<Stmt> statements",
+                "Expression : Expr expression",
+                "Print      : Expr expression",
+                "Var        : Token name, Expr initializer "
         ));
     }
 
@@ -26,7 +35,7 @@ public class GenerateAst {
             String path = outputDir + "/" + baseName + ".java";
             PrintWriter writer = new PrintWriter(path, "UTF-8");
 
-            writer.println("package com.craftinginterpreters.lox;");
+            writer.println("package lox;");
             writer.println();
             writer.println("import java.util.List;");
             writer.println();
@@ -41,7 +50,7 @@ public class GenerateAst {
             }
 
             writer.println();
-            writer.println("  abstract <R> R accept(Visitor<R> visitor);");
+            writer.println(" abstract <R> R accept(Visitor<R> visitor);");
 
             writer.println("}");
             writer.close();

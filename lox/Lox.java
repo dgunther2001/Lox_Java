@@ -13,6 +13,7 @@ public class Lox {
     static boolean hadError = false;
     static boolean hadRuntimeError = false;
     public static void main(String[] args) throws IOException{
+        /* 
         if (args.length > 1) {
             System.out.println("Usage jlox [script]");
             System.exit(64);
@@ -21,6 +22,8 @@ public class Lox {
         } else {
             runPrompt();
         }
+        */
+        runFile("loxtest");
     }
 
     /*
@@ -58,15 +61,15 @@ public class Lox {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
         Parser parser = new Parser(tokens);
-        Expr expression = parser.parse();
+        List<Stmt> statements = parser.parse();
 
         if(hadError) return;
 
-        interpreter.interpret(expression);
+        interpreter.interpret(statements);
     }
 
     /*
-     * Some basic error handling mechanisms
+     * Some basic error handling molechanisms
      */
     static void error(int line, String message) {
         report(line, "", message); // gives us a line
